@@ -1,0 +1,1706 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Beacon Surf 3D - Modo No Coin</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@600;700&family=Plus+Jakarta+Sans:wght@500;600;700;800&family=JetBrains+Mono:wght@700;800&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            overflow: hidden;
+            touch-action: none;
+            user-select: none;
+            background-color: #0b1120;
+        }
+        .display-font {
+            font-family: 'Fredoka', sans-serif;
+        }
+        .mono-font {
+            font-family: 'JetBrains Mono', monospace;
+        }
+        #threeCanvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+        }
+        .glass-panel {
+            background: rgba(15, 23, 42, 0.72);
+            backdrop-filter: blur(14px);
+            -webkit-backdrop-filter: blur(14px);
+            border: 1px solid rgba(255, 255, 255, 0.14);
+        }
+        .glass-card {
+            background: rgba(30, 41, 59, 0.65);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            20%, 60% { transform: translateX(-8px); }
+            40%, 80% { transform: translateX(8px); }
+        }
+        .shake-screen {
+            animation: shake 0.38s ease-in-out;
+        }
+        @keyframes pulseGlow {
+            0%, 100% { box-shadow: 0 0 20px rgba(56, 189, 248, 0.35); }
+            50% { box-shadow: 0 0 32px rgba(56, 189, 248, 0.65); }
+        }
+        .glow-btn {
+            animation: pulseGlow 2.4s infinite;
+        }
+    </style>
+</head>
+<body class="w-screen h-screen flex items-center justify-center bg-slate-950 text-white relative">
+
+    <!-- Container Responsivo Tela Cheia / App -->
+    <div id="gameContainer" class="relative w-full h-full overflow-hidden bg-sky-400">
+        
+        <!-- Cena 3D WebGL -->
+        <canvas id="threeCanvas"></canvas>
+
+        <!-- HUD Durante a Corrida -->
+        <div id="hud" class="hidden absolute top-0 left-0 w-full p-4 sm:p-6 flex justify-between items-start pointer-events-none z-10">
+            <!-- Cronômetro No Coin -->
+            <div class="glass-panel px-4 py-2.5 rounded-2xl shadow-xl flex flex-col border-l-4 border-l-amber-400">
+                <div class="flex items-center gap-2">
+                    <span id="timerStatusDot" class="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-ping"></span>
+                    <span class="text-[11px] uppercase tracking-widest text-amber-300 font-extrabold">Tempo No Coin</span>
+                </div>
+                <span id="timerDisplay" class="mono-font text-2xl sm:text-4xl text-white font-extrabold tracking-tight mt-0.5">00:00.00</span>
+            </div>
+
+            <!-- Distância & Modo -->
+            <div class="flex flex-col items-end gap-2">
+                <div class="glass-panel px-4 py-2 rounded-2xl shadow-xl text-right">
+                    <span class="text-[10px] uppercase tracking-widest text-slate-300 block font-bold">Distância</span>
+                    <span id="scoreDisplay" class="display-font text-xl sm:text-2xl text-white">0m</span>
+                </div>
+                <div class="glass-panel px-3 py-1 rounded-xl flex items-center gap-1.5 border border-rose-500/40">
+                    <span class="text-xs">🚫🪙</span>
+                    <span id="hudSpeedBadge" class="text-[11px] font-extrabold uppercase text-sky-300">Normal</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Notificação Toast -->
+        <div id="toastMessage" class="hidden absolute top-24 left-1/2 -translate-x-1/2 z-50 glass-panel border-emerald-400/50 text-white px-5 py-3 rounded-2xl shadow-2xl text-xs sm:text-sm font-bold flex items-center gap-2.5 whitespace-nowrap">
+            <span id="toastIcon">✨</span>
+            <span id="toastText">Código resgatado!</span>
+        </div>
+
+        <!-- TELA INICIAL (ESTILO BEACON SURF / LOVABLE MODERN UI) -->
+        <div id="startScreen" class="absolute inset-0 bg-gradient-to-b from-slate-950/65 via-slate-950/45 to-slate-950/85 backdrop-blur-[3px] flex flex-col justify-between p-5 sm:p-8 z-20">
+            
+            <!-- Header Superior -->
+            <div class="w-full max-w-2xl mx-auto flex justify-between items-center">
+                <div class="glass-panel px-3.5 py-2 rounded-2xl flex items-center gap-2.5 shadow-lg">
+                    <span id="activeSkinBadge" class="w-3.5 h-3.5 rounded-full bg-sky-500 ring-2 ring-white/30"></span>
+                    <span id="activeSkinName" class="text-xs sm:text-sm font-bold text-white">Beacon Surfer</span>
+                </div>
+
+                <button id="openSettingsBtn" class="glass-panel hover:bg-slate-800/90 active:scale-95 px-4 py-2.5 rounded-2xl shadow-lg transition-all cursor-pointer flex items-center gap-2 text-xs sm:text-sm font-bold text-white">
+                    <svg class="w-4 h-4 text-sky-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
+                    Configurações
+                </button>
+            </div>
+
+            <!-- Centro Hero -->
+            <div class="my-auto flex flex-col items-center text-center max-w-md mx-auto">
+                <div class="mb-3 inline-flex items-center gap-2 glass-panel border-amber-400/40 text-amber-300 px-4 py-1.5 rounded-full text-xs font-extrabold uppercase tracking-wider shadow-md">
+                    <span>⏱️</span> Modo No Coin Ativo
+                </div>
+                
+                <h1 class="display-font text-5xl sm:text-6xl font-bold tracking-tight text-white drop-shadow-[0_4px_20px_rgba(0,0,0,0.5)] leading-none mb-3">
+                    BEACON<span class="text-sky-400">SURF</span>
+                </h1>
+                
+                <p class="text-slate-200 text-xs sm:text-sm mb-6 leading-relaxed font-medium drop-shadow">
+                    Suba no teto dos <span class="text-amber-300 font-bold">ônibus 3D</span>, salte barreiras baixas, deslize por baixo das placas altas e <span class="text-rose-400 font-bold">desvie de todas as moedas</span> para manter o cronômetro rodando!
+                </p>
+
+                <!-- Card de Recorde -->
+                <div class="glass-panel px-6 py-3 rounded-2xl mb-6 flex items-center gap-4 shadow-xl">
+                    <div class="text-left">
+                        <span class="block text-[10px] uppercase tracking-wider text-slate-400 font-bold">Melhor Tempo No Coin</span>
+                        <span id="menuBestTime" class="mono-font text-xl font-extrabold text-emerald-400">00:00.00</span>
+                    </div>
+                    <div class="h-8 w-px bg-white/15"></div>
+                    <div class="text-left">
+                        <span class="block text-[10px] uppercase tracking-wider text-slate-400 font-bold">Velocidade</span>
+                        <span id="menuSpeedLabel" class="text-sm font-extrabold text-sky-300">Normal</span>
+                    </div>
+                </div>
+
+                <!-- Botão Play Principal -->
+                <button id="startBtn" class="glow-btn w-full max-w-xs bg-gradient-to-r from-sky-400 via-blue-500 to-indigo-500 hover:from-sky-300 hover:to-indigo-400 active:scale-95 text-white display-font text-2xl py-4 px-8 rounded-2xl shadow-2xl transition-all cursor-pointer border border-white/25">
+                    INICIAR CORRIDA
+                </button>
+            </div>
+
+            <!-- Rodapé com Controles -->
+            <div class="w-full max-w-md mx-auto grid grid-cols-3 gap-2.5 text-center text-[11px] font-semibold text-slate-200">
+                <div class="glass-card p-2.5 rounded-2xl">
+                    <span class="block text-base mb-0.5">⬅️ ➡️</span>
+                    Desviar Trilho
+                </div>
+                <div class="glass-card p-2.5 rounded-2xl">
+                    <span class="block text-base mb-0.5">⬆️</span>
+                    Pular / Subir Ônibus
+                </div>
+                <div class="glass-card p-2.5 rounded-2xl">
+                    <span class="block text-base mb-0.5">⬇️</span>
+                    Deslizar Baixo
+                </div>
+            </div>
+        </div>
+
+        <!-- MODAL DE CONFIGURAÇÕES (Gráficos, Velocidade e Resgate de Códigos) -->
+        <div id="settingsModal" class="hidden absolute inset-0 bg-slate-950/90 backdrop-blur-xl flex flex-col justify-between p-5 sm:p-8 z-40 overflow-y-auto">
+            <div class="w-full max-w-lg mx-auto">
+                <div class="flex justify-between items-center border-b border-white/10 pb-4 mb-5">
+                    <h2 class="display-font text-2xl sm:text-3xl text-white flex items-center gap-2.5">
+                        <span class="text-sky-400">⚙️</span> Configurações
+                    </h2>
+                    <button id="closeSettingsBtn" class="glass-card hover:bg-slate-700 text-slate-200 w-10 h-10 rounded-xl flex items-center justify-center font-bold cursor-pointer">✕</button>
+                </div>
+
+                <!-- 1. Qualidade Gráfica -->
+                <div class="mb-6">
+                    <label class="block text-xs uppercase tracking-wider text-slate-400 font-extrabold mb-2.5">Qualidade Gráfica 3D</label>
+                    <div class="grid grid-cols-3 gap-2.5" id="graphicsOptions">
+                        <button data-gfx="low" class="gfx-btn py-3 px-3 rounded-2xl text-xs font-bold border border-white/10 bg-slate-900 text-slate-400 transition-all cursor-pointer">
+                            Baixo
+                        </button>
+                        <button data-gfx="medium" class="gfx-btn py-3 px-3 rounded-2xl text-xs font-bold border border-white/10 bg-slate-900 text-slate-400 transition-all cursor-pointer">
+                            Médio
+                        </button>
+                        <button data-gfx="high" class="gfx-btn py-3 px-3 rounded-2xl text-xs font-bold border border-sky-400 bg-sky-500/20 text-sky-300 transition-all cursor-pointer">
+                            Alto ✨
+                        </button>
+                    </div>
+                    <p id="gfxDesc" class="text-xs text-slate-400 mt-2">Sombras 3D em tempo real, antialiasing e névoa atmosférica.</p>
+                </div>
+
+                <!-- 2. Velocidade do Jogo -->
+                <div class="mb-6">
+                    <label class="block text-xs uppercase tracking-wider text-slate-400 font-extrabold mb-2.5">Velocidade da Corrida</label>
+                    <div class="grid grid-cols-3 gap-2.5" id="speedOptions">
+                        <button data-spd="slow" class="spd-btn py-3 px-3 rounded-2xl text-xs font-bold border border-white/10 bg-slate-900 text-slate-400 transition-all cursor-pointer">
+                            🐢 Devagar
+                        </button>
+                        <button data-spd="normal" class="spd-btn py-3 px-3 rounded-2xl text-xs font-bold border border-emerald-400 bg-emerald-500/20 text-emerald-300 transition-all cursor-pointer">
+                            🏃 Normal
+                        </button>
+                        <button data-spd="fast" class="spd-btn py-3 px-3 rounded-2xl text-xs font-bold border border-white/10 bg-slate-900 text-slate-400 transition-all cursor-pointer">
+                            ⚡ Rápida
+                        </button>
+                    </div>
+                </div>
+
+                <!-- 3. Resgatar Código Promocional -->
+                <div class="glass-card rounded-2xl p-4 sm:p-5 mb-6">
+                    <label class="block text-xs uppercase tracking-wider text-amber-300 font-extrabold mb-1">🎁 Resgatar Código & Acesso ADM</label>
+                    <p class="text-xs text-slate-300 mb-3">Insira um código promocional ou a chave de ADM para desbloquear a skin privada:</p>
+                    
+                    <div class="flex gap-2">
+                        <input id="redeemInput" type="text" placeholder="Digite código ou chave ADM..." class="flex-1 bg-slate-950/90 border border-white/15 rounded-xl px-3.5 py-2.5 text-xs sm:text-sm font-bold uppercase text-white placeholder-slate-500 focus:outline-none focus:border-sky-400">
+                        <button id="redeemBtn" class="bg-gradient-to-r from-amber-400 to-orange-500 hover:from-amber-300 hover:to-orange-400 active:scale-95 text-slate-950 font-extrabold text-xs sm:text-sm px-5 py-2.5 rounded-xl transition-all cursor-pointer shadow-lg">
+                            RESGATAR
+                        </button>
+                    </div>
+
+                    <!-- Lista de Códigos Disponíveis -->
+                    <div class="mt-3 pt-3 border-t border-white/10 flex flex-wrap gap-1.5 items-center">
+                        <span class="text-[11px] text-slate-400 font-semibold">Códigos:</span>
+                        <span class="text-[11px] bg-slate-900/90 border border-white/10 text-sky-300 px-2.5 py-0.5 rounded-lg font-mono">BEACONSURF</span>
+                        <span class="text-[11px] bg-slate-900/90 border border-white/10 text-amber-300 px-2.5 py-0.5 rounded-lg font-mono">NOCOIN2026</span>
+                        <span class="text-[11px] bg-slate-900/90 border border-white/10 text-emerald-300 px-2.5 py-0.5 rounded-lg font-mono">OUROPRO</span>
+                        <span class="text-[11px] bg-slate-900/90 border border-white/10 text-purple-300 px-2.5 py-0.5 rounded-lg font-mono">NEONFAST</span>
+                        <span class="text-[11px] bg-slate-900/90 border border-amber-400/40 text-amber-300 px-2.5 py-0.5 rounded-lg font-mono">SUPREMO2026</span>
+                    </div>
+                </div>
+
+                <!-- Seletor de Mapas Estilo Subway Surfers -->
+                <div class="mb-6">
+                    <label class="block text-xs uppercase tracking-wider text-slate-400 font-extrabold mb-2.5">🗺️ Mapas (Estilo Subway Surfers)</label>
+                    <div id="mapSelector" class="grid grid-cols-2 gap-2.5">
+                        <!-- Preenchido via JS -->
+                    </div>
+                </div>
+
+                <!-- Seletor de Personagens -->
+                <div>
+                    <label class="block text-xs uppercase tracking-wider text-slate-400 font-extrabold mb-2.5">👕 Skins Liberadas</label>
+                    <div id="skinSelector" class="grid grid-cols-2 gap-2.5">
+                        <!-- Preenchido via JS -->
+                    </div>
+                </div>
+            </div>
+
+            <div class="w-full max-w-lg mx-auto mt-6">
+                <button id="saveSettingsBtn" class="w-full bg-gradient-to-r from-emerald-400 to-teal-500 hover:from-emerald-300 hover:to-teal-400 text-slate-950 display-font text-xl py-3.5 rounded-2xl shadow-xl cursor-pointer">
+                    SALVAR E VOLTAR
+                </button>
+            </div>
+        </div>
+
+        <!-- TELA DE FIM DE JOGO / CRONÔMETRO CONGELADO -->
+        <div id="gameOverScreen" class="hidden absolute inset-0 bg-slate-950/85 backdrop-blur-lg flex flex-col items-center justify-center p-6 z-30 text-center">
+            <div id="gameOverIcon" class="w-20 h-20 bg-rose-500/20 border-2 border-rose-500 rounded-3xl flex items-center justify-center text-4xl mb-4 shadow-[0_0_35px_rgba(244,63,94,0.45)]">
+                🪙
+            </div>
+            
+            <h2 id="gameOverTitle" class="display-font text-3xl sm:text-4xl text-white mb-2">
+                CRONÔMETRO PARADO!
+            </h2>
+            
+            <div id="crashReasonBadge" class="bg-rose-600/90 text-white font-bold text-xs sm:text-sm px-4 py-1.5 rounded-full mb-6 shadow-lg border border-rose-400/50">
+                Você encostou em uma moeda!
+            </div>
+
+            <!-- Card de Resultados -->
+            <div class="w-full max-w-xs glass-panel rounded-3xl p-5 mb-6 space-y-3.5 shadow-2xl">
+                <div class="flex flex-col items-center border-b border-white/10 pb-3.5">
+                    <span class="text-slate-400 text-[11px] font-extrabold uppercase tracking-wider">Tempo Sem Pegar Moedas</span>
+                    <span id="finalTimeEl" class="mono-font text-3xl sm:text-4xl text-amber-400 font-extrabold mt-1">00:00.00</span>
+                </div>
+                <div class="flex justify-between items-center text-sm">
+                    <span class="text-slate-300 font-semibold">Melhor Tempo</span>
+                    <span id="bestTimeEl" class="mono-font text-base text-emerald-400 font-extrabold">00:00.00</span>
+                </div>
+                <div class="flex justify-between items-center text-sm">
+                    <span class="text-slate-300 font-semibold">Distância</span>
+                    <span id="finalDistEl" class="display-font text-base text-white">0m</span>
+                </div>
+            </div>
+
+            <!-- Botões -->
+            <div class="flex flex-col gap-3 w-full max-w-xs">
+                <button id="restartBtn" class="w-full bg-gradient-to-r from-sky-400 to-blue-600 hover:from-sky-300 hover:to-blue-500 active:scale-95 text-white display-font text-xl py-4 px-6 rounded-2xl shadow-xl transition-all cursor-pointer border border-white/20">
+                    CORRER NOVAMENTE
+                </button>
+                <button id="backToMenuBtn" class="w-full glass-card hover:bg-slate-800 text-slate-200 font-bold text-sm py-3.5 px-6 rounded-2xl transition-all cursor-pointer">
+                    VOLTAR AO MENU
+                </button>
+            </div>
+        </div>
+
+        <!-- Controles Touch Mobile -->
+        <div id="touchControls" class="hidden absolute bottom-5 left-0 w-full px-5 flex justify-between items-center pointer-events-none z-10 sm:hidden">
+            <button id="btnLeft" class="pointer-events-auto w-14 h-14 glass-panel rounded-2xl flex items-center justify-center text-2xl active:scale-90">⬅️</button>
+            <div class="flex gap-3">
+                <button id="btnDown" class="pointer-events-auto w-14 h-14 glass-panel rounded-2xl flex items-center justify-center text-2xl active:scale-90">⬇️</button>
+                <button id="btnUp" class="pointer-events-auto w-14 h-14 glass-panel rounded-2xl flex items-center justify-center text-2xl active:scale-90">⬆️</button>
+            </div>
+            <button id="btnRight" class="pointer-events-auto w-14 h-14 glass-panel rounded-2xl flex items-center justify-center text-2xl active:scale-90">➡️</button>
+        </div>
+    </div>
+
+    <script>
+        /**
+         * ============================================================================
+         * 1. CONFIGURAÇÕES, SKINS E CÓDIGOS PROMOCIONAIS
+         * ============================================================================
+         */
+        const settings = {
+            graphics: localStorage.getItem('bs_graphics') || 'high',
+            speedMode: localStorage.getItem('bs_speed') || 'normal',
+            activeSkin: localStorage.getItem('bs_skin') || 'default',
+            activeMap: localStorage.setItem ? (localStorage.getItem('bs_map') || 'subway_city') : 'subway_city'
+        };
+
+        // Mapas inspirados no universo do Subway Surfers
+        const MAPS = {
+            subway_city: {
+                id: 'subway_city',
+                name: 'Subway City',
+                sky: 0x4fc3f7,
+                fog: 0xb3e5fc,
+                ground: 0x3f7d20,
+                road: 0x262b33,
+                curb: 0x9ca3af,
+                bed: 0x57534e,
+                buildingColors: [0x9ca3af, 0x64748b, 0x78716c, 0x475569, 0x52525b, 0x6b7280]
+            },
+            rio_sunset: {
+                id: 'rio_sunset',
+                name: 'Rio Sunset',
+                sky: 0xf97316,
+                fog: 0xfdba74,
+                ground: 0xeab308,
+                road: 0x334155,
+                curb: 0xf8fafc,
+                bed: 0x78350f,
+                buildingColors: [0xfef08a, 0xfdba74, 0x38bdf8, 0xf472b6, 0xe2e8f0]
+            },
+            tokyo_neon: {
+                id: 'tokyo_neon',
+                name: 'Tokyo Neon',
+                sky: 0x1e1b4b,
+                fog: 0x312e81,
+                ground: 0x111827,
+                road: 0x0f172a,
+                curb: 0x06b6d4,
+                bed: 0x1f2937,
+                buildingColors: [0x312e81, 0x4c1d95, 0x0f172a, 0x1e293b, 0x581c87]
+            },
+            cairo_gold: {
+                id: 'cairo_gold',
+                name: 'Cairo Gold',
+                sky: 0xf59e0b,
+                fog: 0xfde68a,
+                ground: 0xd97706,
+                road: 0x451a03,
+                curb: 0xfef3c7,
+                bed: 0x92400e,
+                buildingColors: [0xfbbf24, 0xd97706, 0xb45309, 0xfde68a, 0x78350f]
+            }
+        };
+
+        // Garante que se um jogador comum tinha salvo a skin ADM no localStorage sem ter a chave, volte para a skin padrão
+        if (settings.activeSkin === 'adm_special' && !settings.admUnlocked) {
+            settings.activeSkin = 'default';
+            localStorage.setItem('bs_skin', 'default');
+        }
+
+        const SKINS = {
+            default:    { id: 'default',    name: 'Jake Clássico', jacket: 0x0288d1, cap: 0xff1744, pants: 0x1e293b, unlocked: true,  isAdm: false, speedBoost: 1.0 },
+            beaconsurf: { id: 'beaconsurf', name: 'Pro Beacon',    jacket: 0x6366f1, cap: 0x38bdf8, pants: 0x0f172a, unlocked: true,  isAdm: false, speedBoost: 1.0 },
+            nocoin:     { id: 'nocoin',     name: 'Sombra Stealth',jacket: 0x1e293b, cap: 0xef4444, pants: 0x090d16, unlocked: true,  isAdm: false, speedBoost: 1.0 },
+            gold:       { id: 'gold',       name: 'Rei Dourado',   jacket: 0xf59e0b, cap: 0xfef08a, pants: 0x451a03, unlocked: true,  isAdm: false, speedBoost: 1.0 },
+            neon:       { id: 'neon',       name: 'Cyber Neon',    jacket: 0xa855f7, cap: 0x10b981, pants: 0x1e1b4b, unlocked: true,  isAdm: false, speedBoost: 1.0 },
+            crimson:    { id: 'crimson',    name: 'Fúria Rubra',   jacket: 0xe11d48, cap: 0xfde047, pants: 0x4c0519, unlocked: true,  isAdm: false, speedBoost: 1.0 },
+            mint:       { id: 'mint',       name: 'Brisa Mint',    jacket: 0x10b981, cap: 0x064e3b, pants: 0x022c22, unlocked: true,  isAdm: false, speedBoost: 1.0 },
+            sunset:     { id: 'sunset',     name: 'Pôr do Sol',    jacket: 0xf97316, cap: 0x7c2d12, pants: 0x27272a, unlocked: true,  isAdm: false, speedBoost: 1.0 },
+            adm_special:{ id: 'adm_special',name: '👑 Supremo',    jacket: 0x7c3aed, cap: 0xfacc15, pants: 0x090d16, unlocked: true,  isAdm: false, speedBoost: 1.22 }
+        };
+
+        const SPEED_CONFIG = {
+            slow:   { base: 24, max: 36, label: 'Devagar' },
+            normal: { base: 34, max: 52, label: 'Normal' },
+            fast:   { base: 46, max: 68, label: 'Rápida' }
+        };
+
+        let isPlaying = false;
+        let timerStopped = false;
+        let invulnerableTimer = 0;
+        let startTime = 0;
+        let elapsedTimeMs = 0;
+        let bestTimeMs = parseFloat(localStorage.getItem('bs_best_time')) || 0;
+        let distance = 0;
+        let currentSpeed = 34;
+
+        /**
+         * ============================================================================
+         * 2. ÁUDIO SINTETIZADO (WEB AUDIO API)
+         * ============================================================================
+         */
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        function playSound(type) {
+            try {
+                if (audioCtx.state === 'suspended') audioCtx.resume();
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                osc.connect(gain);
+                gain.connect(audioCtx.destination);
+                const now = audioCtx.currentTime;
+
+                if (type === 'move') {
+                    osc.type = 'sine';
+                    osc.frequency.setValueAtTime(340, now);
+                    osc.frequency.exponentialRampToValueAtTime(540, now + 0.06);
+                    gain.gain.setValueAtTime(0.1, now);
+                    gain.gain.exponentialRampToValueAtTime(0.01, now + 0.06);
+                    osc.start(now); osc.stop(now + 0.06);
+                } else if (type === 'jump') {
+                    osc.type = 'triangle';
+                    osc.frequency.setValueAtTime(280, now);
+                    osc.frequency.exponentialRampToValueAtTime(640, now + 0.14);
+                    gain.gain.setValueAtTime(0.15, now);
+                    gain.gain.exponentialRampToValueAtTime(0.01, now + 0.14);
+                    osc.start(now); osc.stop(now + 0.14);
+                } else if (type === 'coinStop') {
+                    osc.type = 'square';
+                    osc.frequency.setValueAtTime(880, now);
+                    osc.frequency.setValueAtTime(440, now + 0.12);
+                    gain.gain.setValueAtTime(0.22, now);
+                    gain.gain.exponentialRampToValueAtTime(0.01, now + 0.35);
+                    osc.start(now); osc.stop(now + 0.35);
+                } else if (type === 'crash') {
+                    osc.type = 'sawtooth';
+                    osc.frequency.setValueAtTime(150, now);
+                    osc.frequency.exponentialRampToValueAtTime(40, now + 0.32);
+                    gain.gain.setValueAtTime(0.25, now);
+                    gain.gain.exponentialRampToValueAtTime(0.01, now + 0.32);
+                    osc.start(now); osc.stop(now + 0.32);
+                } else if (type === 'redeem') {
+                    osc.type = 'triangle';
+                    osc.frequency.setValueAtTime(523.25, now);
+                    osc.frequency.setValueAtTime(659.25, now + 0.09);
+                    osc.frequency.setValueAtTime(783.99, now + 0.18);
+                    gain.gain.setValueAtTime(0.18, now);
+                    gain.gain.exponentialRampToValueAtTime(0.01, now + 0.38);
+                    osc.start(now); osc.stop(now + 0.38);
+                }
+            } catch (e) {}
+        }
+
+        function formatTime(ms) {
+            const totalSeconds = Math.floor(ms / 1000);
+            const minutes = Math.floor(totalSeconds / 60);
+            const seconds = totalSeconds % 60;
+            const centiseconds = Math.floor((ms % 1000) / 10);
+            return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}.${String(centiseconds).padStart(2, '0')}`;
+        }
+
+        /**
+         * ============================================================================
+         * 3. MOTOR 3D THREE.JS (ESTILO SUBWAY / BEACON SURF)
+         * ============================================================================
+         */
+        const canvas = document.getElementById('threeCanvas');
+        const renderer = new THREE.WebGLRenderer({ canvas, antialias: settings.graphics !== 'low' });
+        renderer.setSize(window.innerWidth, window.innerHeight);
+        renderer.setPixelRatio(settings.graphics === 'low' ? 1 : Math.min(window.devicePixelRatio, 2));
+        renderer.shadowMap.enabled = settings.graphics === 'high';
+        renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        renderer.toneMapping = THREE.ACESFilmicToneMapping;
+        renderer.toneMappingExposure = 1.08;
+
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x4fc3f7);
+        scene.fog = new THREE.FogExp2(0xb3e5fc, 0.0065);
+
+        const camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 240);
+        camera.position.set(0, 6.2, 10.5);
+        camera.lookAt(0, 2.2, -12);
+
+        // Iluminação Solar Realista com luz ambiente, céu/solo e sombra direcional
+        const ambientLight = new THREE.AmbientLight(0xdbeafe, 0.45);
+        scene.add(ambientLight);
+
+        const hemiLight = new THREE.HemisphereLight(0xe0f2fe, 0x3f6212, 0.85);
+        hemiLight.position.set(0, 60, 0);
+        scene.add(hemiLight);
+
+        const dirLight = new THREE.DirectionalLight(0xfffbeb, 1.35);
+        dirLight.position.set(22, 42, 24);
+        dirLight.castShadow = true;
+        dirLight.shadow.mapSize.width = 2048;
+        dirLight.shadow.mapSize.height = 2048;
+        dirLight.shadow.bias = -0.0005;
+        dirLight.shadow.camera.near = 5;
+        dirLight.shadow.camera.far = 140;
+        const d = 28;
+        dirLight.shadow.camera.left = -d;
+        dirLight.shadow.camera.right = d;
+        dirLight.shadow.camera.top = d;
+        dirLight.shadow.camera.bottom = -d;
+        scene.add(dirLight);
+
+        // Constantes de Pista 3D
+        const LANE_WIDTH = 3.2;
+        const BUS_HEIGHT = 3.2;
+        const BUS_LENGTH = 13.0;
+
+        // Chão realista: gramado com rugosidade, asfalto urbano fosco, meio-fio e calçadas
+        const groundGeo = new THREE.PlaneGeometry(70, 260);
+        const groundMat = new THREE.MeshStandardMaterial({ color: 0x3f7d20, roughness: 0.92, metalness: 0.02 });
+        const ground = new THREE.Mesh(groundGeo, groundMat);
+        ground.rotation.x = -Math.PI / 2;
+        ground.position.z = -100;
+        ground.receiveShadow = true;
+        scene.add(ground);
+
+        const roadGeo = new THREE.PlaneGeometry(13.6, 260);
+        const roadMat = new THREE.MeshStandardMaterial({ color: 0x262b33, roughness: 0.85, metalness: 0.08 });
+        const road = new THREE.Mesh(roadGeo, roadMat);
+        road.rotation.x = -Math.PI / 2;
+        road.position.set(0, 0.01, -100);
+        road.receiveShadow = true;
+        scene.add(road);
+
+        // Meio-fio elevado nas bordas da via
+        [-6.9, 6.9].forEach(curbX => {
+            const curbGeo = new THREE.BoxGeometry(0.35, 0.22, 260);
+            const curbMat = new THREE.MeshStandardMaterial({ color: 0x9ca3af, roughness: 0.8, metalness: 0.05 });
+            const curb = new THREE.Mesh(curbGeo, curbMat);
+            curb.position.set(curbX, 0.11, -100);
+            curb.castShadow = true;
+            curb.receiveShadow = true;
+            scene.add(curb);
+        });
+
+        // Leito de brita dos 3 trilhos
+        [-1, 0, 1].forEach(lane => {
+            const bedGeo = new THREE.PlaneGeometry(2.5, 260);
+            const bedMat = new THREE.MeshStandardMaterial({ color: 0x57534e, roughness: 0.95, metalness: 0.04 });
+            const bed = new THREE.Mesh(bedGeo, bedMat);
+            bed.rotation.x = -Math.PI / 2;
+            bed.position.set(lane * LANE_WIDTH, 0.02, -100);
+            bed.receiveShadow = true;
+            scene.add(bed);
+
+            // Trilhos de aço polido com reflexo metálico realista
+            [-0.75, 0.75].forEach(offset => {
+                const railGeo = new THREE.BoxGeometry(0.14, 0.15, 260);
+                const railMat = new THREE.MeshStandardMaterial({ color: 0xd1d5db, metalness: 0.85, roughness: 0.25 });
+                const rail = new THREE.Mesh(railGeo, railMat);
+                rail.position.set(lane * LANE_WIDTH + offset, 0.1, -100);
+                rail.castShadow = true;
+                scene.add(rail);
+            });
+        });
+
+        // Dormentes de madeira, postes de iluminação pública e nuvens 3D realistas
+        const trackProps = [];
+        const tieGeo = new THREE.BoxGeometry(2.2, 0.09, 0.36);
+        const tieMat = new THREE.MeshStandardMaterial({ color: 0x451a03, roughness: 0.9, metalness: 0.05 });
+
+        for (let z = 15; z > -210; z -= 2.2) {
+            [-1, 0, 1].forEach(lane => {
+                const tie = new THREE.Mesh(tieGeo, tieMat);
+                tie.position.set(lane * LANE_WIDTH, 0.045, z);
+                tie.receiveShadow = true;
+                scene.add(tie);
+                trackProps.push(tie);
+            });
+        }
+
+        // Postes de luz ao longo da via
+        const poleMat = new THREE.MeshStandardMaterial({ color: 0x374151, metalness: 0.75, roughness: 0.35 });
+        const lampMat = new THREE.MeshStandardMaterial({ color: 0xfef9c3, emissive: 0xfef08a, emissiveIntensity: 0.6 });
+        for (let z = 6; z > -210; z -= 28) {
+            [-1, 1].forEach(side => {
+                const poleGroup = new THREE.Group();
+                const post = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.16, 7.5, 10), poleMat);
+                post.position.y = 3.75;
+                post.castShadow = true;
+
+                const arm = new THREE.Mesh(new THREE.BoxGeometry(2.2, 0.12, 0.12), poleMat);
+                arm.position.set(-side * 1.0, 7.4, 0);
+
+                const bulb = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.08, 0.25), lampMat);
+                bulb.position.set(-side * 1.7, 7.32, 0);
+
+                poleGroup.add(post, arm, bulb);
+                poleGroup.position.set(side * 8.2, 0, z);
+                scene.add(poleGroup);
+                trackProps.push(poleGroup);
+            });
+        }
+
+        // Nuvens 3D volumosas no céu
+        const clouds = [];
+        const cloudMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.95, metalness: 0.0 });
+        for (let i = 0; i < 14; i++) {
+            const cGroup = new THREE.Group();
+            const p1 = new THREE.Mesh(new THREE.SphereGeometry(3.2, 12, 10), cloudMat);
+            const p2 = new THREE.Mesh(new THREE.SphereGeometry(2.3, 12, 10), cloudMat);
+            p2.position.set(2.6, -0.4, 0.4);
+            const p3 = new THREE.Mesh(new THREE.SphereGeometry(2.1, 12, 10), cloudMat);
+            p3.position.set(-2.5, -0.5, -0.3);
+            cGroup.add(p1, p2, p3);
+            cGroup.position.set(
+                (Math.random() - 0.5) * 85,
+                22 + Math.random() * 12,
+                -20 - Math.random() * 190
+            );
+            scene.add(cGroup);
+            clouds.push(cGroup);
+        }
+
+        // Prédios urbanos com janelas e fachadas realistas
+        const buildingColors = [0x9ca3af, 0x64748b, 0x78716c, 0x475569, 0x52525b, 0x6b7280];
+        const sideBuildings = [];
+        for (let z = 10; z > -210; z -= 14) {
+            [-1, 1].forEach(side => {
+                const h = 12 + Math.random() * 16;
+                const w = 6.5 + Math.random() * 4;
+                const bGeo = new THREE.BoxGeometry(w, h, 11);
+                const bMat = new THREE.MeshStandardMaterial({
+                    color: buildingColors[Math.floor(Math.random() * buildingColors.length)],
+                    roughness: 0.72,
+                    metalness: 0.15
+                });
+                const building = new THREE.Mesh(bGeo, bMat);
+                building.position.set(side * (12.2 + w / 2), h / 2, z);
+                building.castShadow = true;
+                building.receiveShadow = true;
+                scene.add(building);
+                sideBuildings.push(building);
+            });
+        }
+
+        /**
+         * ============================================================================
+         * 4. PERSONAGEM 3D ESTILO SUBWAY SURFERS (CORREDOR URBANO ESTILIZADO)
+         * ============================================================================
+         */
+        const playerGroup = new THREE.Group();
+        scene.add(playerGroup);
+
+        // Materiais do Corredor Estilo Subway Surfers (acabamento liso/acetinado urbano)
+        const skinMat = new THREE.MeshStandardMaterial({ color: 0xffcca3, roughness: 0.55, metalness: 0.05 });
+        const jacketMat = new THREE.MeshStandardMaterial({ color: 0x0288d1, roughness: 0.65, metalness: 0.08 });
+        const hoodieTrimMat = new THREE.MeshStandardMaterial({ color: 0xf8fafc, roughness: 0.7, metalness: 0.05 });
+        const capMat = new THREE.MeshStandardMaterial({ color: 0xff1744, roughness: 0.5, metalness: 0.1 });
+        const hairMat = new THREE.MeshStandardMaterial({ color: 0x451a03, roughness: 0.75, metalness: 0.05 });
+        const pantsMat = new THREE.MeshStandardMaterial({ color: 0x1e293b, roughness: 0.75, metalness: 0.05 });
+        const shoeMat = new THREE.MeshStandardMaterial({ color: 0xf8fafc, roughness: 0.4, metalness: 0.1 });
+        const shoeSoleMat = new THREE.MeshStandardMaterial({ color: 0xef4444, roughness: 0.6, metalness: 0.1 });
+        const eyeMat = new THREE.MeshBasicMaterial({ color: 0x0f172a });
+        const eyeWhiteMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
+
+        // Moletom largo estilo Subway Surfers (tronco ligeiramente largo e esportivo)
+        const torso = new THREE.Mesh(new THREE.BoxGeometry(0.96, 1.06, 0.56), jacketMat);
+        torso.position.y = 1.34;
+        torso.castShadow = true;
+        playerGroup.add(torso);
+
+        // Detalhe do zíper / faixa frontal do moletom
+        const zipperStripe = new THREE.Mesh(new THREE.BoxGeometry(0.12, 1.02, 0.04), hoodieTrimMat);
+        zipperStripe.position.set(0, 1.34, -0.27);
+        playerGroup.add(zipperStripe);
+
+        // Gola / Capuz dobrado nas costas e mochila urbana
+        const hood = new THREE.Mesh(new THREE.BoxGeometry(0.76, 0.42, 0.34), jacketMat);
+        hood.position.set(0, 1.82, 0.24);
+        hood.rotation.x = 0.28;
+        hood.castShadow = true;
+        playerGroup.add(hood);
+
+        const backpack = new THREE.Mesh(new THREE.BoxGeometry(0.68, 0.74, 0.3), pantsMat);
+        backpack.position.set(0, 1.36, 0.38);
+        backpack.castShadow = true;
+        playerGroup.add(backpack);
+
+        // Cabeça estilizada com queixo/bochechas arredondadas, cabelo e boné de aba reta
+        const headGroup = new THREE.Group();
+        headGroup.position.set(0, 2.26, -0.04);
+
+        const head = new THREE.Mesh(new THREE.BoxGeometry(0.82, 0.8, 0.78), skinMat);
+        head.castShadow = true;
+        headGroup.add(head);
+
+        // Cabelo arrepiado saindo pela lateral/trás do boné
+        const hairBack = new THREE.Mesh(new THREE.BoxGeometry(0.78, 0.34, 0.42), hairMat);
+        hairBack.position.set(0, 0.18, 0.26);
+        headGroup.add(hairBack);
+
+        // Olhos expressivos estilo Subway Surfers
+        const leftEyeWhite = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.2, 0.04), eyeWhiteMat);
+        leftEyeWhite.position.set(-0.2, 0.03, -0.4);
+        const leftPupil = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.14, 0.05), eyeMat);
+        leftPupil.position.set(-0.18, 0.02, -0.41);
+
+        const rightEyeWhite = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.2, 0.04), eyeWhiteMat);
+        rightEyeWhite.position.set(0.2, 0.03, -0.4);
+        const rightPupil = new THREE.Mesh(new THREE.BoxGeometry(0.1, 0.14, 0.05), eyeMat);
+        rightPupil.position.set(0.18, 0.02, -0.41);
+        headGroup.add(leftEyeWhite, leftPupil, rightEyeWhite, rightPupil);
+
+        // Boné estiloso com aba frontal
+        const cap = new THREE.Mesh(new THREE.BoxGeometry(0.86, 0.28, 0.82), capMat);
+        cap.position.set(0, 0.44, 0.02);
+        cap.castShadow = true;
+
+        const capButton = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.08, 0.12), hoodieTrimMat);
+        capButton.position.set(0, 0.6, 0.02);
+
+        const capBrim = new THREE.Mesh(new THREE.BoxGeometry(0.86, 0.07, 0.38), capMat);
+        capBrim.position.set(0, 0.34, -0.48);
+        headGroup.add(cap, capButton, capBrim);
+
+        // Acessórios exclusivos de luxo da Skin 👑 ADM Supremo (Coroa dourada com detalhes e capa real)
+        const admCrownGroup = new THREE.Group();
+        admCrownGroup.position.set(0, 0.68, 0.02);
+        const crownMat = new THREE.MeshStandardMaterial({
+            color: 0xfacc15,
+            emissive: 0xca8a04,
+            emissiveIntensity: 0.45,
+            metalness: 0.9,
+            roughness: 0.15
+        });
+        const crownBase = new THREE.Mesh(new THREE.BoxGeometry(0.66, 0.14, 0.66), crownMat);
+        const spike1 = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.22, 0.14), crownMat);
+        spike1.position.set(-0.24, 0.16, -0.24);
+        const spike2 = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.22, 0.14), crownMat);
+        spike2.position.set(0.24, 0.16, -0.24);
+        const spike3 = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.22, 0.14), crownMat);
+        spike3.position.set(-0.24, 0.16, 0.24);
+        const spike4 = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.22, 0.14), crownMat);
+        spike4.position.set(0.24, 0.16, 0.24);
+        const centerGem = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.12, 0.06), new THREE.MeshBasicMaterial({ color: 0x38bdf8 }));
+        centerGem.position.set(0, 0.01, -0.34);
+        admCrownGroup.add(crownBase, spike1, spike2, spike3, spike4, centerGem);
+        admCrownGroup.visible = false;
+        headGroup.add(admCrownGroup);
+
+        const admCapeMat = new THREE.MeshStandardMaterial({
+            color: 0xe11d48,
+            emissive: 0x881337,
+            emissiveIntensity: 0.3,
+            roughness: 0.35,
+            metalness: 0.35,
+            side: THREE.DoubleSide
+        });
+        const admCape = new THREE.Mesh(new THREE.BoxGeometry(0.92, 1.28, 0.06), admCapeMat);
+        admCape.position.set(0, 1.22, 0.54);
+        admCape.rotation.x = 0.16;
+        admCape.visible = false;
+        playerGroup.add(admCape);
+        playerGroup.add(headGroup);
+
+        // Pernas articuladas com calça cargo/jeans e tênis esportivo branco com sola colorida
+        const leftLegPivot = new THREE.Group();
+        leftLegPivot.position.set(-0.24, 0.84, 0);
+        const leftLeg = new THREE.Mesh(new THREE.BoxGeometry(0.36, 0.64, 0.38), pantsMat);
+        leftLeg.position.set(0, -0.32, 0);
+        leftLeg.castShadow = true;
+        const leftShoe = new THREE.Mesh(new THREE.BoxGeometry(0.38, 0.18, 0.52), shoeMat);
+        leftShoe.position.set(0, -0.72, -0.06);
+        const leftSole = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.07, 0.54), shoeSoleMat);
+        leftSole.position.set(0, -0.81, -0.06);
+        leftLegPivot.add(leftLeg, leftShoe, leftSole);
+        playerGroup.add(leftLegPivot);
+
+        const rightLegPivot = new THREE.Group();
+        rightLegPivot.position.set(0.24, 0.84, 0);
+        const rightLeg = new THREE.Mesh(new THREE.BoxGeometry(0.36, 0.64, 0.38), pantsMat);
+        rightLeg.position.set(0, -0.32, 0);
+        rightLeg.castShadow = true;
+        const rightShoe = new THREE.Mesh(new THREE.BoxGeometry(0.38, 0.18, 0.52), shoeMat);
+        rightShoe.position.set(0, -0.72, -0.06);
+        const rightSole = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.07, 0.54), shoeSoleMat);
+        rightSole.position.set(0, -0.81, -0.06);
+        rightLegPivot.add(rightLeg, rightShoe, rightSole);
+        playerGroup.add(rightLegPivot);
+
+        // Braços articulados com manga do moletom e mãos
+        const leftArmPivot = new THREE.Group();
+        leftArmPivot.position.set(-0.62, 1.76, 0);
+        const leftSleeve = new THREE.Mesh(new THREE.BoxGeometry(0.32, 0.52, 0.34), jacketMat);
+        leftSleeve.position.set(0, -0.24, 0);
+        leftSleeve.castShadow = true;
+        const leftHand = new THREE.Mesh(new THREE.BoxGeometry(0.26, 0.26, 0.28), skinMat);
+        leftHand.position.set(0, -0.58, 0);
+        leftArmPivot.add(leftSleeve, leftHand);
+        playerGroup.add(leftArmPivot);
+
+        const rightArmPivot = new THREE.Group();
+        rightArmPivot.position.set(0.62, 1.76, 0);
+        const rightSleeve = new THREE.Mesh(new THREE.BoxGeometry(0.32, 0.52, 0.34), jacketMat);
+        rightSleeve.position.set(0, -0.24, 0);
+        rightSleeve.castShadow = true;
+        const rightHand = new THREE.Mesh(new THREE.BoxGeometry(0.26, 0.26, 0.28), skinMat);
+        rightHand.position.set(0, -0.58, 0);
+        rightArmPivot.add(rightSleeve, rightHand);
+        playerGroup.add(rightArmPivot);
+
+        function applySkinColors() {
+            const s = (SKINS[settings.activeSkin] && SKINS[settings.activeSkin].unlocked)
+                ? SKINS[settings.activeSkin]
+                : SKINS.default;
+            jacketMat.color.setHex(s.jacket);
+            capMat.color.setHex(s.cap);
+            pantsMat.color.setHex(s.pants);
+            shoeSoleMat.color.setHex(s.cap);
+            // Visual premium e brilho especial na skin privada de ADM
+            jacketMat.emissive.setHex(s.isAdm ? 0x4c1d95 : 0x000000);
+            jacketMat.emissiveIntensity = s.isAdm ? 0.45 : 0;
+            jacketMat.metalness = s.isAdm ? 0.55 : 0.08;
+            jacketMat.roughness = s.isAdm ? 0.22 : 0.65;
+            admCrownGroup.visible = !!s.isAdm;
+            admCape.visible = !!s.isAdm;
+        }
+
+        function applyMapTheme() {
+            const mapCfg = MAPS[settings.activeMap] || MAPS.subway_city;
+            scene.background.setHex(mapCfg.sky);
+            if (scene.fog) {
+                scene.fog.color.setHex(mapCfg.fog);
+            }
+            groundMat.color.setHex(mapCfg.ground);
+            roadMat.color.setHex(mapCfg.road);
+            sideBuildings.forEach((b, idx) => {
+                const c = mapCfg.buildingColors[idx % mapCfg.buildingColors.length];
+                b.material.color.setHex(c);
+            });
+        }
+        applySkinColors();
+        applyMapTheme();
+
+        // Estado físico do Jogador (Apenas 1 pulo por apoio no chão ou teto do ônibus)
+        const player = {
+            lane: 0,
+            y: 0,
+            vy: 0,
+            groundY: 0,
+            isJumping: false,
+            jumpsRemaining: 1,
+            isRolling: false,
+            rollTimer: 0,
+            rollSpinAngle: 0,
+
+            reset() {
+                this.lane = 0;
+                this.y = 0;
+                this.vy = 0;
+                this.groundY = 0;
+                this.isJumping = false;
+                this.jumpsRemaining = 1;
+                this.isRolling = false;
+                this.rollTimer = 0;
+                this.rollSpinAngle = 0;
+                playerGroup.visible = true;
+                playerGroup.position.set(0, 0, 0);
+                playerGroup.rotation.set(0, 0, 0);
+                playerGroup.scale.set(1, 1, 1);
+            },
+
+            moveLeft() {
+                if (this.lane > -1) { this.lane--; playSound('move'); }
+            },
+
+            moveRight() {
+                if (this.lane < 1) { this.lane++; playSound('move'); }
+            },
+
+            jump() {
+                // Apenas 1 pulo disponível por toque no chão ou no teto do ônibus (sem pulo infinito)
+                if (this.jumpsRemaining <= 0) return;
+                this.jumpsRemaining = 0;
+                this.isJumping = true;
+                this.isRolling = false;
+                this.rollTimer = 0;
+                playerGroup.scale.y = 1;
+                this.vy = 23.5;
+                playSound('jump');
+            },
+
+            roll() {
+                // Deslizar rápido e responsivo: corta o salto no ar, inicia giro completo (rolamento) e puxa para baixo na hora
+                if (this.isJumping) {
+                    this.vy = -44;
+                }
+                this.isRolling = true;
+                this.rollTimer = 0.5;
+                this.rollSpinAngle = 0;
+                playSound('move');
+            },
+
+            update(dt, timeSec) {
+                // Atualiza janela de 2 segundos de invencibilidade após bater
+                if (invulnerableTimer > 0) {
+                    invulnerableTimer = Math.max(0, invulnerableTimer - dt);
+                    playerGroup.visible = Math.floor(timeSec * 18) % 2 === 0;
+                    if (invulnerableTimer === 0) {
+                        playerGroup.visible = true;
+                    }
+                } else {
+                    playerGroup.visible = true;
+                }
+
+                // Troca de pista com resposta 0 delay + leve inclinação lateral
+                const targetX = this.lane * LANE_WIDTH;
+                const dx = targetX - playerGroup.position.x;
+                playerGroup.position.x += dx * Math.min(1, dt * 42);
+                playerGroup.rotation.z = THREE.MathUtils.clamp(-dx * 0.11, -0.26, 0.26);
+                if (!this.isRolling) {
+                    playerGroup.rotation.x = 0;
+                }
+
+                // Verifica se está em cima de algum ônibus (ignora ônibus que você já atravessou após bater)
+                let supportedY = 0;
+                for (const ent of entities) {
+                    if (ent.type === 'bus' && !ent.passThrough && Math.abs(playerGroup.position.x - ent.x) < 1.25) {
+                        const frontZ = ent.mesh.position.z + BUS_LENGTH / 2;
+                        const backZ = ent.mesh.position.z - BUS_LENGTH / 2;
+                        if (0 <= frontZ + 0.4 && 0 >= backZ - 0.4) {
+                            if (this.y >= BUS_HEIGHT - 0.45) {
+                                supportedY = BUS_HEIGHT;
+                            }
+                        }
+                    }
+                }
+                this.groundY = supportedY;
+
+                // Se saiu do teto do ônibus sem pular, cai rápido e leve
+                if (this.y > this.groundY && !this.isJumping) {
+                    this.isJumping = true;
+                    this.vy = -4;
+                }
+
+                // Gravidade e salto responsivos
+                if (this.isJumping) {
+                    this.y += this.vy * dt;
+                    const gravity = this.isRolling ? 85 : 68;
+                    this.vy -= gravity * dt;
+                    if (this.y <= this.groundY) {
+                        this.y = this.groundY;
+                        this.isJumping = false;
+                        this.vy = 0;
+                        this.jumpsRemaining = 1; // Restaura 1 pulo ao tocar o chão ou teto do ônibus
+                    }
+                } else {
+                    this.jumpsRemaining = 1;
+                }
+
+                // Aplica altura no grupo do personagem
+                playerGroup.position.y = this.y;
+
+                // Animação de rolamento completo ao descer (passar por baixo das barras altas)
+                if (this.isRolling) {
+                    this.rollTimer -= dt;
+                    this.rollSpinAngle = Math.min(Math.PI * 2, this.rollSpinAngle + dt * (Math.PI * 4.2));
+                    playerGroup.rotation.x = -this.rollSpinAngle;
+                    playerGroup.scale.y += (0.52 - playerGroup.scale.y) * Math.min(1, dt * 28);
+                    if (this.rollTimer <= 0) {
+                        this.isRolling = false;
+                        this.rollSpinAngle = 0;
+                        playerGroup.rotation.x = 0;
+                    }
+                } else {
+                    playerGroup.rotation.x = 0;
+                    playerGroup.scale.y += (1 - playerGroup.scale.y) * Math.min(1, dt * 26);
+                }
+                // Animação rápida de corrida dos membros estilo Subway Surfers
+                const swing = this.isJumping ? 0.65 : Math.sin(timeSec * 22) * 0.9;
+                leftLegPivot.rotation.x = swing;
+                rightLegPivot.rotation.x = -swing;
+                leftArmPivot.rotation.x = -swing * 0.9;
+                rightArmPivot.rotation.x = swing * 0.9;
+                headGroup.rotation.x = this.isJumping ? -0.18 : Math.abs(Math.sin(timeSec * 22)) * 0.08;
+                if (admCrownGroup.visible) {
+                    admCrownGroup.rotation.y = Math.sin(timeSec * 4) * 0.15;
+                    admCape.rotation.x = 0.16 + Math.abs(Math.sin(timeSec * 16)) * 0.14;
+                }
+            }
+        };
+
+        /**
+         * ============================================================================
+         * 5. OBSTÁCULOS 3D (ÔNIBUS CAMINHÁVEL, BARRA BAIXA, BARRA ALTA) E MOEDAS
+         * ============================================================================
+         */
+        let entities = [];
+
+        function createBusMesh(hasRamp, colorHex) {
+            const group = new THREE.Group();
+
+            // Corpo Principal do Ônibus com pintura automotiva semibrilho
+            const bodyGeo = new THREE.BoxGeometry(2.35, BUS_HEIGHT, BUS_LENGTH);
+            const bodyMat = new THREE.MeshStandardMaterial({ color: colorHex, roughness: 0.35, metalness: 0.25 });
+            const body = new THREE.Mesh(bodyGeo, bodyMat);
+            body.position.y = BUS_HEIGHT / 2;
+            body.castShadow = true;
+            body.receiveShadow = true;
+            group.add(body);
+
+            // Rodas com pneus de borracha e calotas metálicas nas laterais
+            const tireGeo = new THREE.CylinderGeometry(0.58, 0.58, 0.34, 16);
+            tireGeo.rotateZ(Math.PI / 2);
+            const tireMat = new THREE.MeshStandardMaterial({ color: 0x18181b, roughness: 0.88, metalness: 0.05 });
+            const rimGeo = new THREE.CylinderGeometry(0.32, 0.32, 0.36, 12);
+            rimGeo.rotateZ(Math.PI / 2);
+            const rimMat = new THREE.MeshStandardMaterial({ color: 0xe5e7eb, roughness: 0.25, metalness: 0.85 });
+
+            [-4.2, 4.2].forEach(zWheel => {
+                [-1.15, 1.15].forEach(xWheel => {
+                    const wheel = new THREE.Mesh(tireGeo, tireMat);
+                    wheel.position.set(xWheel, 0.58, zWheel);
+                    wheel.castShadow = true;
+                    const rim = new THREE.Mesh(rimGeo, rimMat);
+                    rim.position.set(xWheel, 0.58, zWheel);
+                    group.add(wheel, rim);
+                });
+            });
+
+            // Teto Branco Caminhável com bordas
+            const roofGeo = new THREE.BoxGeometry(2.25, 0.14, BUS_LENGTH - 0.2);
+            const roofMat = new THREE.MeshStandardMaterial({ color: 0xf8fafc, roughness: 0.45, metalness: 0.1 });
+            const roof = new THREE.Mesh(roofGeo, roofMat);
+            roof.position.y = BUS_HEIGHT + 0.02;
+            roof.receiveShadow = true;
+            group.add(roof);
+
+            // Para-brisa frontal com vidro reflexivo escuro
+            const glassGeo = new THREE.BoxGeometry(2.05, 1.1, 0.1);
+            const glassMat = new THREE.MeshStandardMaterial({ color: 0x0f172a, roughness: 0.1, metalness: 0.85 });
+            const glass = new THREE.Mesh(glassGeo, glassMat);
+            glass.position.set(0, BUS_HEIGHT * 0.65, BUS_LENGTH / 2 + 0.02);
+            group.add(glass);
+
+            // Faróis
+            const lightGeo = new THREE.BoxGeometry(0.4, 0.25, 0.1);
+            const lightMat = new THREE.MeshBasicMaterial({ color: 0xfef08a });
+            const l1 = new THREE.Mesh(lightGeo, lightMat);
+            l1.position.set(-0.75, 0.7, BUS_LENGTH / 2 + 0.03);
+            const l2 = new THREE.Mesh(lightGeo, lightMat);
+            l2.position.set(0.75, 0.7, BUS_LENGTH / 2 + 0.03);
+            group.add(l1, l2);
+
+            // Rampa frontal se o ônibus tiver rampa de subida
+            if (hasRamp) {
+                const rampLength = 4.6;
+                const rampAngle = Math.atan2(BUS_HEIGHT, rampLength);
+                const hyp = Math.hypot(BUS_HEIGHT, rampLength);
+                const rampGeo = new THREE.BoxGeometry(2.2, 0.2, hyp);
+                const rampMat = new THREE.MeshStandardMaterial({ color: 0xfbbf24, roughness: 0.5, metalness: 0.2 });
+                const ramp = new THREE.Mesh(rampGeo, rampMat);
+                ramp.position.set(0, BUS_HEIGHT / 2, BUS_LENGTH / 2 + rampLength / 2 - 0.2);
+                ramp.rotation.x = rampAngle;
+                ramp.castShadow = true;
+                group.add(ramp);
+            }
+
+            return group;
+        }
+
+        function createLowBarMesh() {
+            const group = new THREE.Group();
+            const postGeo = new THREE.BoxGeometry(0.18, 1.25, 0.18);
+            const postMat = new THREE.MeshLambertMaterial({ color: 0xcbd5e1 });
+
+            const p1 = new THREE.Mesh(postGeo, postMat);
+            p1.position.set(-1.1, 0.625, 0);
+            const p2 = new THREE.Mesh(postGeo, postMat);
+            p2.position.set(1.1, 0.625, 0);
+
+            // Barra Laranja (Só passa pulando!)
+            const barGeo = new THREE.BoxGeometry(2.45, 0.55, 0.24);
+            const barMat = new THREE.MeshLambertMaterial({ color: 0xf97316 });
+            const bar = new THREE.Mesh(barGeo, barMat);
+            bar.position.set(0, 0.95, 0);
+            bar.castShadow = true;
+
+            const stripeGeo = new THREE.BoxGeometry(1.8, 0.2, 0.26);
+            const stripeMat = new THREE.MeshBasicMaterial({ color: 0xffffff });
+            const stripe = new THREE.Mesh(stripeGeo, stripeMat);
+            stripe.position.set(0, 0.95, 0);
+
+            group.add(p1, p2, bar, stripe);
+            return group;
+        }
+
+        function createHighBarMesh() {
+            const group = new THREE.Group();
+            const postGeo = new THREE.BoxGeometry(0.2, 3.3, 0.2);
+            const postMat = new THREE.MeshLambertMaterial({ color: 0x94a3b8 });
+
+            const p1 = new THREE.Mesh(postGeo, postMat);
+            p1.position.set(-1.15, 1.65, 0);
+            const p2 = new THREE.Mesh(postGeo, postMat);
+            p2.position.set(1.15, 1.65, 0);
+
+            // Placa Superior Vermelha (Deixa vão embaixo para passar deslizando!)
+            const boardGeo = new THREE.BoxGeometry(2.55, 1.65, 0.28);
+            const boardMat = new THREE.MeshLambertMaterial({ color: 0xef4444 });
+            const board = new THREE.Mesh(boardGeo, boardMat);
+            board.position.set(0, 2.45, 0);
+            board.castShadow = true;
+
+            const signGeo = new THREE.BoxGeometry(1.7, 0.45, 0.3);
+            const signMat = new THREE.MeshBasicMaterial({ color: 0xfef08a });
+            const sign = new THREE.Mesh(signGeo, signMat);
+            sign.position.set(0, 2.45, 0);
+
+            group.add(p1, p2, board, sign);
+            return group;
+        }
+
+        const coinGeo = new THREE.CylinderGeometry(0.55, 0.55, 0.16, 18);
+        coinGeo.rotateX(Math.PI / 2);
+        const coinMat = new THREE.MeshStandardMaterial({
+            color: 0xfbbf24,
+            emissive: 0xd97706,
+            emissiveIntensity: 0.35,
+            metalness: 0.7,
+            roughness: 0.2
+        });
+
+        function spawnCoin(lane, y, z) {
+            const mesh = new THREE.Mesh(coinGeo, coinMat);
+            mesh.position.set(lane * LANE_WIDTH, y, z);
+            scene.add(mesh);
+            entities.push({ type: 'coin', lane, x: lane * LANE_WIDTH, y, mesh });
+        }
+
+        function spawnWave(startZ = -135) {
+            const lanes = [-1, 0, 1];
+            lanes.sort(() => Math.random() - 0.5);
+            const pattern = Math.random();
+            const busColors = [0xeab308, 0x0284c7, 0xdc2626, 0x16a34a];
+
+            if (pattern < 0.42) {
+                // Ônibus com rampa (dá pra subir!) + Barra Baixa + Moedas
+                const hasRamp = Math.random() > 0.35;
+                const busMesh = createBusMesh(hasRamp, busColors[Math.floor(Math.random() * busColors.length)]);
+                busMesh.position.set(lanes[0] * LANE_WIDTH, 0, startZ);
+                scene.add(busMesh);
+                entities.push({ type: 'bus', lane: lanes[0], x: lanes[0] * LANE_WIDTH, hasRamp, passThrough: false, mesh: busMesh });
+
+                // Moeda no teto do ônibus para testar seus reflexos
+                if (Math.random() > 0.4) {
+                    spawnCoin(lanes[0], BUS_HEIGHT + 0.85, startZ - 2);
+                }
+
+                // Barra baixa (só passa pulando)
+                const lowMesh = createLowBarMesh();
+                lowMesh.position.set(lanes[1] * LANE_WIDTH, 0, startZ);
+                scene.add(lowMesh);
+                entities.push({ type: 'lowBar', lane: lanes[1], x: lanes[1] * LANE_WIDTH, mesh: lowMesh });
+
+                // Fileira de moedas na pista livre (tem que desviar!)
+                for (let i = 0; i < 3; i++) {
+                    spawnCoin(lanes[2], 0.85, startZ + (i * 3.2));
+                }
+
+            } else if (pattern < 0.75) {
+                // Barra que só passa por baixo + Barra que só passa pulando
+                const highMesh = createHighBarMesh();
+                highMesh.position.set(lanes[0] * LANE_WIDTH, 0, startZ);
+                scene.add(highMesh);
+                entities.push({ type: 'highBar', lane: lanes[0], x: lanes[0] * LANE_WIDTH, mesh: highMesh });
+
+                const lowMesh = createLowBarMesh();
+                lowMesh.position.set(lanes[1] * LANE_WIDTH, 0, startZ);
+                scene.add(lowMesh);
+                entities.push({ type: 'lowBar', lane: lanes[1], x: lanes[1] * LANE_WIDTH, mesh: lowMesh });
+
+                // Moeda alta acima da barra baixa
+                spawnCoin(lanes[1], 2.7, startZ);
+                // Moeda na pista 2
+                spawnCoin(lanes[2], 0.85, startZ - 2);
+
+            } else {
+                // Dois ônibus lado a lado para correr por cima dos tetos
+                const bus1 = createBusMesh(true, 0xdc2626);
+                bus1.position.set(lanes[0] * LANE_WIDTH, 0, startZ);
+                scene.add(bus1);
+                entities.push({ type: 'bus', lane: lanes[0], x: lanes[0] * LANE_WIDTH, hasRamp: true, passThrough: false, mesh: bus1 });
+
+                const bus2 = createBusMesh(false, 0x2563eb);
+                bus2.position.set(lanes[1] * LANE_WIDTH, 0, startZ - 7);
+                scene.add(bus2);
+                entities.push({ type: 'bus', lane: lanes[1], x: lanes[1] * LANE_WIDTH, hasRamp: false, passThrough: false, mesh: bus2 });
+
+                const highMesh = createHighBarMesh();
+                highMesh.position.set(lanes[2] * LANE_WIDTH, 0, startZ);
+                scene.add(highMesh);
+                entities.push({ type: 'highBar', lane: lanes[2], x: lanes[2] * LANE_WIDTH, mesh: highMesh });
+
+                spawnCoin(lanes[2], 0.85, startZ - 4);
+            }
+        }
+
+        /**
+         * ============================================================================
+         * 6. LOOP DE ATUALIZAÇÃO, COLISÕES E REGRA NO COIN
+         * ============================================================================
+         */
+        let lastFrameTime = performance.now();
+        let spawnDistanceCounter = 0;
+
+        function animate(now) {
+            requestAnimationFrame(animate);
+
+            const dt = Math.min(0.05, (now - lastFrameTime) / 1000);
+            lastFrameTime = now;
+            const timeSec = now * 0.001;
+
+            if (!isPlaying) {
+                // Câmera suave na tela inicial
+                playerGroup.position.y = Math.abs(Math.sin(timeSec * 3)) * 0.12;
+                renderer.render(scene, camera);
+                return;
+            }
+
+            // Atualiza Cronômetro em tempo real enquanto não pegar moeda
+            if (!timerStopped) {
+                elapsedTimeMs = now - startTime;
+                document.getElementById('timerDisplay').textContent = formatTime(elapsedTimeMs);
+            }
+
+            // Aceleração gradual respeitando a velocidade escolhida + bônus de velocidade da skin ADM
+            const spdCfg = SPEED_CONFIG[settings.speedMode];
+            const activeSkinObj = (SKINS[settings.activeSkin] && SKINS[settings.activeSkin].unlocked)
+                ? SKINS[settings.activeSkin]
+                : SKINS.default;
+            const skinMultiplier = activeSkinObj.speedBoost || 1.0;
+            currentSpeed = Math.min(spdCfg.max * skinMultiplier, (spdCfg.base + (elapsedTimeMs * 0.00024)) * skinMultiplier);
+            const moveStep = currentSpeed * dt;
+            distance += moveStep * 0.6;
+            document.getElementById('scoreDisplay').textContent = `${Math.floor(distance)}m`;
+
+            // Move cenário infinito (dormentes, postes, nuvens e prédios)
+            trackProps.forEach(tie => {
+                tie.position.z += moveStep;
+                if (tie.position.z > 18) tie.position.z -= 225;
+            });
+            clouds.forEach(cloud => {
+                cloud.position.z += moveStep * 0.35;
+                if (cloud.position.z > 25) cloud.position.z -= 220;
+            });
+            sideBuildings.forEach(b => {
+                b.position.z += moveStep;
+                if (b.position.z > 22) b.position.z -= 224;
+            });
+
+            // Spawna novas ondas de obstáculos
+            spawnDistanceCounter += moveStep;
+            if (spawnDistanceCounter >= 28) {
+                spawnWave(-140);
+                spawnDistanceCounter = 0;
+            }
+
+            // Atualiza jogador
+            player.update(dt, timeSec);
+
+            // Câmera acompanha suavemente a altura (sobe junto quando sobe no ônibus!)
+            const targetCamY = 6.2 + player.y * 0.82;
+            const targetCamX = playerGroup.position.x * 0.45;
+            camera.position.y += (targetCamY - camera.position.y) * Math.min(1, dt * 8);
+            camera.position.x += (targetCamX - camera.position.x) * Math.min(1, dt * 8);
+            camera.lookAt(playerGroup.position.x * 0.3, 2.0 + player.y * 0.7, -14);
+
+            // Atualiza entidades e verifica colisões
+            for (let i = entities.length - 1; i >= 0; i--) {
+                const ent = entities[i];
+                ent.mesh.position.z += moveStep;
+
+                if (ent.type === 'coin') {
+                    ent.mesh.rotation.y += dt * 4.5;
+                }
+
+                // Remove objetos que já passaram da câmera
+                if (ent.mesh.position.z > 22) {
+                    scene.remove(ent.mesh);
+                    entities.splice(i, 1);
+                    continue;
+                }
+
+                // Checa colisão na pista do jogador
+                const sameLane = Math.abs(playerGroup.position.x - ent.x) < 1.15;
+                if (!sameLane) continue;
+
+                const zPos = ent.mesh.position.z;
+
+                if (ent.type === 'coin') {
+                    // REGRA NO COIN: Encostou na moeda -> Para o cronômetro na hora!
+                    if (Math.abs(zPos) < 0.95 && Math.abs((player.y + 1.1) - ent.y) < 1.25) {
+                        scene.remove(ent.mesh);
+                        entities.splice(i, 1);
+                        stopTimerAndEndGame('coin', '🚫🪙 Você pegou uma moeda! O cronômetro parou.');
+                        break;
+                    }
+                } else if (ent.type === 'bus') {
+                    // Permite atravessar apenas o ônibus exato em que você bateu
+                    if (ent.passThrough) continue;
+
+                    const frontZ = zPos + BUS_LENGTH / 2;
+                    const backZ = zPos - BUS_LENGTH / 2;
+
+                    // Subida suave pela rampa frontal
+                    if (ent.hasRamp && frontZ >= -0.4 && frontZ <= 4.4) {
+                        const rampRatio = Math.min(1, Math.max(0, (4.4 - frontZ) / 4.4));
+                        const rampY = rampRatio * BUS_HEIGHT;
+                        if (player.y < rampY) {
+                            player.y = rampY;
+                            player.groundY = rampY;
+                        }
+                    }
+
+                    // Corpo do ônibus
+                    if (frontZ >= 0 && backZ <= 0) {
+                        if (player.y >= BUS_HEIGHT - 0.5) {
+                            // Está seguro em cima do teto do ônibus!
+                            player.groundY = BUS_HEIGHT;
+                            if (player.y < BUS_HEIGHT) player.y = BUS_HEIGHT;
+                        } else if (!ent.hasRamp) {
+                            handleObstacleHit('bus', '🚌 Você bateu no ônibus!', ent);
+                        }
+                    }
+                } else if (ent.type === 'lowBar') {
+                    // Barra Baixa: Só passa pulando
+                    if (Math.abs(zPos) < 0.65 && player.y < 1.15) {
+                        handleObstacleHit('lowBar', '🚧 Você bateu na barra baixa!', null);
+                    }
+                } else if (ent.type === 'highBar') {
+                    // Barra Alta: Só passa por baixo deslizando
+                    if (Math.abs(zPos) < 0.65 && !player.isRolling && player.y < 1.55) {
+                        handleObstacleHit('highBar', '🛑 Você bateu na placa alta!', null);
+                    }
+                }
+            }
+
+            renderer.render(scene, camera);
+        }
+
+        /**
+         * ============================================================================
+         * 7. FLUXO DE PARTIDA, COLISÕES E CONTROLE DO CRONÔMETRO
+         * ============================================================================
+         */
+        function handleObstacleHit(obstacleType, feedbackMsg, hitBusEntity) {
+            // Se já bateu uma vez e ainda está dentro da janela de 2s:
+            // - Se for o mesmo ônibus em que bateu, deixa atravessar.
+            // - Se bater em qualquer outro obstáculo antes dos 2s acabarem, morre na hora!
+            if (invulnerableTimer > 0) {
+                if (obstacleType === 'bus' && hitBusEntity && hitBusEntity.passThrough) {
+                    return;
+                }
+                stopTimerAndEndGame('crash', '💥 Você bateu novamente antes dos 2 segundos acabarem!');
+                return;
+            }
+
+            invulnerableTimer = 2.0;
+            playSound('crash');
+
+            // Se bateu em um ônibus, marca apenas esse ônibus para poder ser atravessado
+            if (obstacleType === 'bus' && hitBusEntity) {
+                hitBusEntity.passThrough = true;
+                hitBusEntity.mesh.traverse(child => {
+                    if (child.isMesh && child.material && child.material.transparent !== undefined) {
+                        child.material.transparent = true;
+                        child.material.opacity = 0.45;
+                    }
+                });
+            }
+
+            const container = document.getElementById('gameContainer');
+            container.classList.add('shake-screen');
+            setTimeout(() => container.classList.remove('shake-screen'), 400);
+
+            showToast(`${feedbackMsg} (2s de janela — outro golpe mata!)`, '⚠️');
+        }
+
+        function clearAllEntities() {
+            entities.forEach(ent => scene.remove(ent.mesh));
+            entities = [];
+        }
+
+        function startGame() {
+            clearAllEntities();
+            player.reset();
+            applySkinColors();
+
+            isPlaying = true;
+            timerStopped = false;
+            invulnerableTimer = 0;
+            startTime = performance.now();
+            lastFrameTime = startTime;
+            elapsedTimeMs = 0;
+            distance = 0;
+            spawnDistanceCounter = 0;
+
+            currentSpeed = SPEED_CONFIG[settings.speedMode].base;
+            document.getElementById('hudSpeedBadge').textContent = SPEED_CONFIG[settings.speedMode].label;
+            document.getElementById('timerDisplay').textContent = '00:00.00';
+            document.getElementById('timerStatusDot').className = 'w-2.5 h-2.5 rounded-full bg-emerald-400 animate-ping';
+
+            document.getElementById('startScreen').classList.add('hidden');
+            document.getElementById('gameOverScreen').classList.add('hidden');
+            document.getElementById('settingsModal').classList.add('hidden');
+            document.getElementById('hud').classList.remove('hidden');
+            document.getElementById('touchControls').classList.remove('hidden');
+
+            spawnWave(-85);
+            spawnWave(-135);
+        }
+
+        function stopTimerAndEndGame(type, reasonText) {
+            timerStopped = true;
+            isPlaying = false;
+
+            // Congela o cronômetro exatamente no milissegundo da colisão
+            document.getElementById('timerDisplay').textContent = formatTime(elapsedTimeMs);
+            document.getElementById('timerStatusDot').className = 'w-2.5 h-2.5 rounded-full bg-rose-500';
+
+            if (type === 'coin') {
+                playSound('coinStop');
+                document.getElementById('gameOverIcon').textContent = '🪙';
+                document.getElementById('gameOverTitle').textContent = 'CRONÔMETRO PARADO!';
+            } else {
+                playSound('crash');
+                document.getElementById('gameOverIcon').textContent = '💥';
+                document.getElementById('gameOverTitle').textContent = 'VOCÊ BATEU!';
+            }
+
+            const container = document.getElementById('gameContainer');
+            container.classList.add('shake-screen');
+            setTimeout(() => container.classList.remove('shake-screen'), 400);
+
+            if (elapsedTimeMs > bestTimeMs) {
+                bestTimeMs = elapsedTimeMs;
+                localStorage.setItem('bs_best_time', bestTimeMs);
+            }
+
+            document.getElementById('finalTimeEl').textContent = formatTime(elapsedTimeMs);
+            document.getElementById('bestTimeEl').textContent = formatTime(bestTimeMs);
+            document.getElementById('menuBestTime').textContent = formatTime(bestTimeMs);
+            document.getElementById('finalDistEl').textContent = `${Math.floor(distance)}m`;
+            document.getElementById('crashReasonBadge').textContent = reasonText;
+
+            document.getElementById('hud').classList.add('hidden');
+            document.getElementById('touchControls').classList.add('hidden');
+            document.getElementById('gameOverScreen').classList.remove('hidden');
+        }
+
+        /**
+         * ============================================================================
+         * 8. CONFIGURAÇÕES, GRÁFICOS, VELOCIDADE E RESGATE DE CÓDIGOS
+         * ============================================================================
+         */
+        function showToast(text, icon = '✨') {
+            const toast = document.getElementById('toastMessage');
+            document.getElementById('toastText').textContent = text;
+            document.getElementById('toastIcon').textContent = icon;
+            toast.classList.remove('hidden');
+            clearTimeout(window.toastTimer);
+            window.toastTimer = setTimeout(() => toast.classList.add('hidden'), 2800);
+        }
+
+        function applyGraphicsSettings() {
+            renderer.shadowMap.enabled = settings.graphics === 'high';
+            renderer.setPixelRatio(settings.graphics === 'low' ? 0.85 : Math.min(window.devicePixelRatio, 2));
+            const mapCfg = MAPS[settings.activeMap] || MAPS.subway_city;
+            scene.fog = settings.graphics === 'low' ? null : new THREE.FogExp2(mapCfg.fog, 0.0068);
+        }
+
+        function updateSettingsUI() {
+            document.querySelectorAll('.gfx-btn').forEach(btn => {
+                const active = btn.dataset.gfx === settings.graphics;
+                btn.className = active
+                    ? 'gfx-btn py-3 px-3 rounded-2xl text-xs font-bold border border-sky-400 bg-sky-500/20 text-sky-300 transition-all cursor-pointer'
+                    : 'gfx-btn py-3 px-3 rounded-2xl text-xs font-bold border border-white/10 bg-slate-900 text-slate-400 transition-all cursor-pointer';
+            });
+
+            const gfxDescriptions = {
+                low: 'Desempenho leve: sem sombras dinâmicas e resolução otimizada.',
+                medium: 'Equilibrado: névoa 3D suave e iluminação padrão.',
+                high: 'Máxima qualidade: sombras 3D em tempo real e nitidez total.'
+            };
+            document.getElementById('gfxDesc').textContent = gfxDescriptions[settings.graphics];
+
+            document.querySelectorAll('.spd-btn').forEach(btn => {
+                const active = btn.dataset.spd === settings.speedMode;
+                btn.className = active
+                    ? 'spd-btn py-3 px-3 rounded-2xl text-xs font-bold border border-emerald-400 bg-emerald-500/20 text-emerald-300 transition-all cursor-pointer'
+                    : 'spd-btn py-3 px-3 rounded-2xl text-xs font-bold border border-white/10 bg-slate-900 text-slate-400 transition-all cursor-pointer';
+            });
+
+            document.getElementById('menuSpeedLabel').textContent = SPEED_CONFIG[settings.speedMode].label;
+
+            // Atualiza Seletor de Mapas Estilo Subway Surfers
+            const mapContainer = document.getElementById('mapSelector');
+            mapContainer.innerHTML = '';
+            Object.values(MAPS).forEach(mp => {
+                const isSelected = settings.activeMap === mp.id;
+                const skyHex = '#' + mp.sky.toString(16).padStart(6, '0');
+                const btn = document.createElement('button');
+                btn.className = `p-3 rounded-2xl border text-left flex items-center gap-3 transition-all cursor-pointer ${
+                    isSelected
+                        ? 'bg-slate-800 border-emerald-400 shadow-lg'
+                        : 'bg-slate-900/90 border-white/10 hover:border-white/25'
+                }`;
+                btn.innerHTML = `
+                    <span class="w-4 h-4 rounded-full shrink-0 ring-2 ring-white/20" style="background:${skyHex}"></span>
+                    <div class="overflow-hidden">
+                        <div class="text-xs font-bold text-white truncate">${mp.name}</div>
+                        <div class="text-[10px] ${isSelected ? 'text-emerald-300 font-bold' : 'text-slate-400'}">${isSelected ? 'Mapa Ativo' : 'Selecionar'}</div>
+                    </div>
+                `;
+                btn.onclick = () => {
+                    settings.activeMap = mp.id;
+                    localStorage.setItem('bs_map', mp.id);
+                    applyMapTheme();
+                    applyGraphicsSettings();
+                    updateSettingsUI();
+                    showToast(`Mapa ${mp.name} ativado!`, '🗺️');
+                };
+                mapContainer.appendChild(btn);
+            });
+
+            // Atualiza Lista de Personagens (normais liberadas + skin privada de ADM)
+            const skinContainer = document.getElementById('skinSelector');
+            skinContainer.innerHTML = '';
+            Object.values(SKINS).forEach(skin => {
+                const isSelected = settings.activeSkin === skin.id;
+                const hexColor = '#' + skin.jacket.toString(16).padStart(6, '0');
+                const btn = document.createElement('button');
+                btn.className = `p-3 rounded-2xl border text-left flex items-center gap-3 transition-all cursor-pointer ${
+                    isSelected
+                        ? 'bg-slate-800 border-sky-400 shadow-lg'
+                        : 'bg-slate-900/90 border-white/10 hover:border-white/25'
+                }`;
+                const statusLabel = isSelected ? 'Equipado' : (skin.speedBoost > 1 ? '⚡ Velocidade Extra' : 'Liberado');
+                const statusColor = isSelected ? 'text-sky-300 font-bold' : (skin.speedBoost > 1 ? 'text-amber-300 font-bold' : 'text-emerald-400');
+
+                btn.innerHTML = `
+                    <span class="w-4 h-4 rounded-full shrink-0 ring-2 ring-white/20" style="background:${hexColor}"></span>
+                    <div class="overflow-hidden">
+                        <div class="text-xs font-bold text-white truncate">${skin.name}</div>
+                        <div class="text-[10px] ${statusColor}">${statusLabel}</div>
+                    </div>
+                `;
+                btn.onclick = () => {
+                    settings.activeSkin = skin.id;
+                    localStorage.setItem('bs_skin', skin.id);
+                    applySkinColors();
+                    updateSettingsUI();
+                    showToast(`Skin ${skin.name} equipada!`, '🎨');
+                };
+                skinContainer.appendChild(btn);
+            });
+
+            const currentSkin = SKINS[settings.activeSkin] || SKINS.default;
+            document.getElementById('activeSkinName').textContent = currentSkin.name;
+            document.getElementById('activeSkinBadge').style.backgroundColor = '#' + currentSkin.jacket.toString(16).padStart(6, '0');
+        }
+
+        document.querySelectorAll('.gfx-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                settings.graphics = btn.dataset.gfx;
+                localStorage.setItem('bs_graphics', settings.graphics);
+                applyGraphicsSettings();
+                updateSettingsUI();
+            });
+        });
+
+        document.querySelectorAll('.spd-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                settings.speedMode = btn.dataset.spd;
+                localStorage.setItem('bs_speed', settings.speedMode);
+                updateSettingsUI();
+            });
+        });
+
+        document.getElementById('redeemBtn').addEventListener('click', () => {
+            const input = document.getElementById('redeemInput');
+            const code = input.value.trim().toUpperCase();
+            if (!code) {
+                showToast('Digite um código promocional!', '⚠️');
+                return;
+            }
+
+            const promoMap = {
+                BEACONSURF: 'beaconsurf',
+                NOCOIN2026: 'nocoin',
+                OUROPRO: 'gold',
+                NEONFAST: 'neon',
+                SUPREMO2026: 'adm_special'
+            };
+
+            const targetSkinId = promoMap[code];
+            if (targetSkinId && SKINS[targetSkinId]) {
+                settings.activeSkin = targetSkinId;
+                localStorage.setItem('bs_skin', targetSkinId);
+                playSound('redeem');
+                applySkinColors();
+                updateSettingsUI();
+                showToast(`Skin ${SKINS[targetSkinId].name} ativada!`, '🎉');
+                input.value = '';
+            } else {
+                showToast('Código inválido!', '❌');
+            }
+        });
+
+        // Navegação de Modais
+        document.getElementById('openSettingsBtn').addEventListener('click', () => {
+            updateSettingsUI();
+            document.getElementById('settingsModal').classList.remove('hidden');
+        });
+        document.getElementById('closeSettingsBtn').addEventListener('click', () => {
+            document.getElementById('settingsModal').classList.add('hidden');
+        });
+        document.getElementById('saveSettingsBtn').addEventListener('click', () => {
+            document.getElementById('settingsModal').classList.add('hidden');
+            showToast('Configurações aplicadas!', '✅');
+        });
+
+        document.getElementById('startBtn').addEventListener('click', startGame);
+        document.getElementById('restartBtn').addEventListener('click', startGame);
+        document.getElementById('backToMenuBtn').addEventListener('click', () => {
+            clearAllEntities();
+            player.reset();
+            document.getElementById('gameOverScreen').classList.add('hidden');
+            document.getElementById('startScreen').classList.remove('hidden');
+        });
+
+        /**
+         * ============================================================================
+         * 9. CONTROLES (TECLADO, SWIPE TOUCH E BOTÕES MOBILE)
+         * ============================================================================
+         */
+        window.addEventListener('keydown', (e) => {
+            if (!isPlaying || e.repeat) return;
+            if (e.key === 'ArrowLeft' || e.key === 'a' || e.key === 'A') player.moveLeft();
+            if (e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') player.moveRight();
+            if (e.key === 'ArrowUp' || e.key === 'w' || e.key === 'W' || e.key === ' ') player.jump();
+            if (e.key === 'ArrowDown' || e.key === 's' || e.key === 'S') player.roll();
+        });
+
+        let touchStartX = 0, touchStartY = 0, touchSwiped = false;
+        const containerEl = document.getElementById('gameContainer');
+        containerEl.addEventListener('touchstart', (e) => {
+            touchStartX = e.changedTouches[0].screenX;
+            touchStartY = e.changedTouches[0].screenY;
+            touchSwiped = false;
+        }, { passive: true });
+
+        // Detecta o deslize com 0 delay já no touchmove usando limiar curto e delta instantâneo
+        containerEl.addEventListener('touchmove', (e) => {
+            if (!isPlaying || touchSwiped) return;
+            const curX = e.changedTouches[0].screenX;
+            const curY = e.changedTouches[0].screenY;
+            const dx = curX - touchStartX;
+            const dy = curY - touchStartY;
+            const threshold = 10;
+            if (Math.abs(dx) > threshold || Math.abs(dy) > threshold) {
+                touchSwiped = true;
+                touchStartX = curX;
+                touchStartY = curY;
+                if (Math.abs(dx) > Math.abs(dy)) {
+                    dx > 0 ? player.moveRight() : player.moveLeft();
+                } else {
+                    dy > 0 ? player.roll() : player.jump();
+                }
+            }
+        }, { passive: true });
+
+        containerEl.addEventListener('touchend', (e) => {
+            if (!isPlaying || touchSwiped) return;
+            const dx = e.changedTouches[0].screenX - touchStartX;
+            const dy = e.changedTouches[0].screenY - touchStartY;
+            if (Math.abs(dx) > Math.abs(dy)) {
+                if (Math.abs(dx) > 16) dx > 0 ? player.moveRight() : player.moveLeft();
+            } else {
+                if (Math.abs(dy) > 16) dy > 0 ? player.roll() : player.jump();
+            }
+        }, { passive: true });
+
+        // Usa pointerdown para resposta imediata no toque mobile
+        document.getElementById('btnLeft').addEventListener('pointerdown', (e) => { e.stopPropagation(); if (isPlaying) player.moveLeft(); });
+        document.getElementById('btnRight').addEventListener('pointerdown', (e) => { e.stopPropagation(); if (isPlaying) player.moveRight(); });
+        document.getElementById('btnUp').addEventListener('pointerdown', (e) => { e.stopPropagation(); if (isPlaying) player.jump(); });
+        document.getElementById('btnDown').addEventListener('pointerdown', (e) => { e.stopPropagation(); if (isPlaying) player.roll(); });
+
+        window.addEventListener('resize', () => {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        });
+
+        document.getElementById('menuBestTime').textContent = formatTime(bestTimeMs);
+        applyGraphicsSettings();
+        updateSettingsUI();
+        requestAnimationFrame(animate);
+    </script>
+</body>
+</html>
